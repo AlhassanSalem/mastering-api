@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mastering_api/cache/cache_helper.dart';
 import 'package:mastering_api/core/api/dio_consumer.dart';
 import 'package:mastering_api/cubit/user_cubit.dart';
+import 'package:mastering_api/repo/user_repo.dart';
 import 'package:mastering_api/screens/sign_in_screen.dart';
 
 void main() {
@@ -11,7 +12,7 @@ void main() {
   CacheHelper().init();
   runApp(
     BlocProvider(
-      create: (context) => UserCubit(DioConsumer(dio: Dio())),
+      create: (context) => UserCubit(userRepository: UserRepository(api: DioConsumer(dio: Dio()))),
       child: const MyApp(),
     ),
   );

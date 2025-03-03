@@ -1,21 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:jwt_decoder/jwt_decoder.dart';
-import 'package:mastering_api/cache/cache_helper.dart';
-import 'package:mastering_api/core/api/api_consumer.dart';
-import 'package:mastering_api/core/api/end_points.dart';
-import 'package:mastering_api/core/errors/exception.dart';
-import 'package:mastering_api/core/functions/upload_image_to_api.dart';
 import 'package:mastering_api/cubit/user_state.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mastering_api/models/sign_in_model.dart';
-import 'package:mastering_api/models/sign_up_model.dart';
-import 'package:mastering_api/models/user_model.dart';
+import 'package:mastering_api/repo/user_repo.dart';
 
 class UserCubit extends Cubit<UserState> {
-  final ApiConsumer api;
+  final UserRepository userRepository;
 
-  UserCubit(this.api) : super(UserInitial());
+  UserCubit({required this.userRepository}) : super(UserInitial());
 
   //Sign in Form key
   GlobalKey<FormState> signInFormKey = GlobalKey();
@@ -50,23 +43,10 @@ class UserCubit extends Cubit<UserState> {
   SignInModel? user;
 
   signIn() async {
-    try {
-      emit(SignInLoading());
-      final response = await api.post(
-        EndPoints.signIn,
-        data: {
-          ApiKeys.email: signInEmail.text,
-          ApiKeys.password: signInPassword.text,
-        },
-      );
-      user = SignInModel.fromJson(response);
-      final decodedToken = JwtDecoder.decode(user!.token);
-      CacheHelper().saveData(key: ApiKeys.token, value: user!.token);
-      CacheHelper().saveData(key: ApiKeys.id, value: decodedToken[ApiKeys.id]);
-      emit(SignInSuccess());
-    } on ServerException catch (e) {
-      emit(SignInFailure(errMessage: e.errorModel.errorMessage));
-    }
+    final response = await userRepository.signIn(
+        email: signInEmail.text, password: signInPassword.text);
+
+    response.fold((errMessage)=> emit(SignInFailure(errMessage: errMessage)), (signInModel) => emit(SignInSuccess()));
   }
 
   uploadProfilePic(XFile image) {
@@ -75,39 +55,27 @@ class UserCubit extends Cubit<UserState> {
   }
 
   signUp() async {
-    try {
-      emit(SignUpLoading());
-      final response =
-          await api.post(EndPoints.signUp, isFormData: true, data: {
-        ApiKeys.name: signUpName.text,
-        ApiKeys.email: signUpEmail.text,
-        ApiKeys.password: signUpPassword.text,
-        ApiKeys.confirmPassword: confirmPassword.text,
-        ApiKeys.phone: signUpPhoneNumber.text,
-        ApiKeys.profilePic: uploadImageToApi(profilePic!),
-        ApiKeys.location:
-            '{"name":"methalfa","address":"meet halfa","coordinates":[30.1572709,31.224779]}'
-      });
-      final signUpModel = SignUpModel.fromJson(response);
-      emit(SignUpSuccess(message: signUpModel.message));
-    } on ServerException catch (e) {
-      emit(SignUpFailure(errMessage: e.errorModel.errorMessage));
-    } catch (e){
-      throw Exception(e.toString());
-    }
+    emit(SignInLoading());
+    final response = await userRepository.signUp(
+      name: signUpName.text,
+      email: signUpEmail.text,
+      password: signUpPassword.text,
+      phone: signUpPhoneNumber.text,
+      confirmPassword: confirmPassword.text,
+      profilePic: profilePic!,
+    );
+    response.fold(
+      (errMassage) => emit(SignUpFailure(errMessage: errMassage)),
+      (signUpModel) => emit(SignUpSuccess(message: signUpModel.message)),
+    );
   }
 
   getUserProfile() async {
-    try {
-      emit(GetUserLoading());
-      final response = await api.get(
-        EndPoints.getUserDataById(
-          CacheHelper().getData(key: ApiKeys.id),
-        ),
-      );
-      emit(GetUserSuccess(user: UserModel.fromJson(response)));
-    } on ServerException catch (e) {
-      emit(GetUserFailure(errMessage: e.errorModel.errorMessage));
-    }
+    emit(GetUserLoading());
+    final response = await userRepository.getUserProfile();
+    response.fold(
+      (errMassage) => emit(GetUserFailure(errMessage: errMassage)),
+      (userModel) => emit(GetUserSuccess(user: userModel)),
+    );
   }
 }
